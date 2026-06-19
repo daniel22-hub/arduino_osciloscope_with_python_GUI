@@ -73,34 +73,69 @@ def iniciar_grafica():
     else:
         print("Conectar Arduino")
 
-def play(frame):
+def play(_):
     global arduino, graficando
-    # 1. Si la bandera es False, la animación no hace nada y retorna inmediatamente
+    
     if not graficando:
-        return linea,
+        return linea1, linea2, linea3, linea4, linea5, linea6
         
     if arduino and arduino.is_open:
         arduino.write("M".encode('utf-8'))
+        
         num_respuestas = arduino.in_waiting
         if num_respuestas > 0:
-            respuesta = arduino.read(num_respuestas).decode('utf-8').rstrip()
-            valores = respuesta.split(',')
-            if len(valores) == 6:
-                v1, v2, v3, v4, v5, v6 = map(float, valores)
-                y_data1.append(v1)
-                y_data2.append(v2)
-                y_data3.append(v3)
-                y_data4.append(v4)
-                y_data5.append(v5)
-                y_data6.append(v6)
-                x_data.append(frame) 
-
+            try:
+                # Leemos y limpiamos espacios o saltos de línea
+                respuesta = arduino.readline().decode('utf-8').strip()
+                
+                # --- LÍNEA DE DIAGNÓSTICO (Borrar o comentar después) ---
+                print(f"Recibido del Arduino: '{respuesta}'") 
+                
+                valores = respuesta.split(',')
+                
+                if len(valores) == 6:
+                    v1, v2, v3, v4, v5, v6 = map(float, valores)
+                    
+                    # 1. Guardamos el historial
+                    y_data1.append(v1)
+                    y_data2.append(v2)
+                    y_data3.append(v3)
+                    y_data4.append(v4)
+                    y_data5.append(v5)
+                    y_data6.append(v6)
+                    
+                    muestras_totales = len(x_data)
+                    x_data.append(muestras_totales) 
+                    
+                    # 2. Tomamos SOLO los últimos MAX_PUNTOS
+                    x_ventana = x_data[-max_puntos:]
+                    
+                    # 3. Actualizamos las líneas visuales
+                    linea1.set_data(x_ventana, y_data1[-max_puntos:])
+                    linea2.set_data(x_ventana, y_data2[-max_puntos:])
+                    linea3.set_data(x_ventana, y_data3[-max_puntos:])
+                    linea4.set_data(x_ventana, y_data4[-max_puntos:])
+                    linea5.set_data(x_ventana, y_data5[-max_puntos:])
+                    linea6.set_data(x_ventana, y_data6[-max_puntos:])
+                    
+                    # 4. Ajustamos el eje X
+                    ax.set_xlim(min(x_ventana), max(x_ventana) + 1)
+                    
+                    # 5. FORZAMOS A TKINTER A REDIBUJAR LA GRÁFICA
+                    canvas.draw_idle()
+                    
+                else:
+                    # Diagnóstico si no llegan los 6 valores exactos
+                    print(f"Error de formato: Se esperaban 6 valores, llegaron {len(valores)}")
+                    
+            except ValueError as e:
+                print(f"Error al convertir a número: {e}")
+                
+    return linea1, linea2, linea3, linea4, linea5, linea6
+    
 def pausar_grafica():
     global graficando
     graficando = False
-
-def pause():
-    global arduino, graficando
 
 def detener_grafica():
     global graficando, x_data, y_data1, y_data2, y_data3, y_data4, y_data5, y_data6
@@ -118,7 +153,7 @@ def detener_grafica():
     linea4.set_data(x_data, y_data4)
     linea5.set_data(x_data, y_data5)
     linea6.set_data(x_data, y_data6)
-    ax.set_xlim(0, MAX_PUNTOS)
+    ax.set_xlim(0, max_puntos)
     ax.set_ylim(-2, 7)
 
 def actualizar_canales():
@@ -162,6 +197,35 @@ def actualizar_canales():
             leyenda_actual.remove()
     canvas.draw_idle()  # Redibujamos la gráfica para actualizar la leyenda
 
+def enviar_resistencia():
+    valor = entry_resistencia.get()
+
+def actualizar_muestras():
+    global max_puntos
+    valor = entry_muestras.get()
+    try:
+        nuevo_max = int(valor)
+        if nuevo_max > 0:
+            max_puntos = nuevo_max
+            print(f"Nuevo número de muestras a mostrar: {max_puntos}")
+        else:
+            print("El número de muestras debe ser positivo.")
+    except ValueError:
+        print("Por favor, ingresa un número entero válido para las muestras.")
+
+def actualizar_intervalos():
+    valor = entry_intervalos.get()
+    try:
+        nuevo_intervalo = int(valor)
+        if nuevo_intervalo > 0:
+            ani.event_source.interval = nuevo_intervalo
+            print(f"Nuevo intervalo de lectura: {nuevo_intervalo} ms")
+        else:
+            print("El intervalo debe ser un número positivo.")
+    except ValueError:
+        print("Por favor, ingresa un número entero válido para el intervalo.")
+
+
 #******************************** MAIN GUI
 window = Tk()
 window.geometry("1000x600+10+10")
@@ -178,13 +242,13 @@ panel_izquierdo.pack_propagate(False)
 
 # ------------------------------------------ PANEL DE COMUNICACION
 frame_comunicacion = Frame(panel_izquierdo, bg="lightblue") 
-frame_comunicacion.pack(side=TOP, fill=X, padx=10, pady=10)
+frame_comunicacion.pack(side=TOP, fill=X, padx=10, pady=1)
 
 comunicacion_lbl = Label(frame_comunicacion, text="COMUNICACION", bg="lightblue")
-comunicacion_lbl.pack(pady=5)
+comunicacion_lbl.pack(pady=1)
 
 frame_puerto_com = Frame(frame_comunicacion, bg="lightblue")
-frame_puerto_com.pack(side=TOP, fill=X, padx=5, pady=5)
+frame_puerto_com.pack(side=TOP, fill=X, padx=5, pady=1)
 
 com_list = ttk.Combobox(frame_puerto_com, state="readonly", width=15)
 com_list.pack(side=LEFT, pady=5)
@@ -203,7 +267,7 @@ lbl_id.pack(pady=5)
 
 # ------------------------------------------ PANEL DE PLAY/PASUA/STOP
 panel_control = Frame(panel_izquierdo, bg="lightgreen")
-panel_control.pack(fill=X, padx=10, pady=10)
+panel_control.pack(fill=X, padx=10, pady=1)
 
 lbl_control = Label(panel_control, text="PLAY/PAUSE/STOP", bg="lightgreen")
 lbl_control.pack(pady=5)
@@ -216,28 +280,53 @@ btn_stop.pack(side=LEFT, padx=5)
 
 # ------------------------------------------ PANEL CONFIGURACION
 panel_configuracion = Frame(panel_izquierdo, bg="lightyellow")
-panel_configuracion.pack(fill=X, padx=10, pady=10)
+panel_configuracion.pack(fill=X, padx=10, pady=1)
 
 lbl_configuracion = Label(panel_configuracion, text="CONFIGURACIÓN", bg="lightyellow")
 lbl_configuracion.pack(pady=5)
+panel_canales = Frame(panel_configuracion, bg="lightyellow")
+panel_canales.pack(side=LEFT, fill=X, padx=5, pady=5)
+lbl_canales = Label(panel_canales, text="Canales", bg="lightyellow")
+lbl_canales.pack(pady=5)
 channel1 = BooleanVar(value=False)
-check1 = ttk.Checkbutton(panel_configuracion, text="Canal 1", variable=channel1, command=actualizar_canales)
+check1 = ttk.Checkbutton(panel_canales, text="Canal 1", variable=channel1, command=actualizar_canales)
 check1.pack(pady=5)
 channel2 = BooleanVar(value=False)
-check2 = ttk.Checkbutton(panel_configuracion, text="Canal 2", variable=channel2, command=actualizar_canales)
+check2 = ttk.Checkbutton(panel_canales, text="Canal 2", variable=channel2, command=actualizar_canales)
 check2.pack(pady=5)
 channel3 = BooleanVar(value=False)
-check3 = ttk.Checkbutton(panel_configuracion, text="Canal 3", variable=channel3, command=actualizar_canales)
+check3 = ttk.Checkbutton(panel_canales, text="Canal 3", variable=channel3, command=actualizar_canales)
 check3.pack(pady=5)
 channel4 = BooleanVar(value=False)
-check4 = ttk.Checkbutton(panel_configuracion, text="Canal 4", variable=channel4, command=actualizar_canales)
+check4 = ttk.Checkbutton(panel_canales, text="Canal 4", variable=channel4, command=actualizar_canales)
 check4.pack(pady=5)
 channel5 = BooleanVar(value=False)
-check5 = ttk.Checkbutton(panel_configuracion, text="Canal 5", variable=channel5, command=actualizar_canales)
+check5 = ttk.Checkbutton(panel_canales, text="Canal 5", variable=channel5, command=actualizar_canales)
 check5.pack(pady=5)
 channel6 = BooleanVar(value=False)
-check6 = ttk.Checkbutton(panel_configuracion, text="Canal 6", variable=channel6, command=actualizar_canales)
+check6 = ttk.Checkbutton(panel_canales, text="Canal 6", variable=channel6, command=actualizar_canales)
 check6.pack(pady=5)
+panel_ajustes = Frame(panel_configuracion, bg="lightyellow")
+panel_ajustes.pack(side=RIGHT, fill=X, padx=5, pady=5)
+lbl_resistencia = Label(panel_ajustes, text="Resistencia de control (Ohm)", bg="lightyellow")
+lbl_resistencia.pack(pady=5)
+entry_resistencia = ttk.Entry(panel_ajustes, width=15)
+entry_resistencia.pack(pady=5)
+btn_resistencia = ttk.Button(panel_ajustes, text="Enviar", command=enviar_resistencia)
+btn_resistencia.pack(pady=5)
+lbl_muestras = Label(panel_ajustes, text="Numero de muestras", bg="lightyellow")
+lbl_muestras.pack(pady=5)
+entry_muestras = ttk.Entry(panel_ajustes, width=15)
+entry_muestras.pack(pady=5)
+btn_muestras = ttk.Button(panel_ajustes, text="Enviar", command=actualizar_muestras)
+btn_muestras.pack(pady=5)
+lbl_intervalos = Label(panel_ajustes, text="Intervalo de lectura (ms)", bg="lightyellow")
+lbl_intervalos.pack(pady=5)
+entry_intervalos = ttk.Entry(panel_ajustes, width=15)
+entry_intervalos.pack(pady=5)
+btn_intervalos = ttk.Button(panel_ajustes, text="Enviar", command=actualizar_intervalos)
+btn_intervalos.pack(pady=5)
+
 # ==========================================
 # SECCIÓN DERECHA: Área de la Gráfica
 # ==========================================
@@ -259,7 +348,7 @@ y_data4 = []
 y_data5 = []
 y_data6 = []
 x_data = []
-MAX_PUNTOS = 50 
+max_puntos = 50 
 linea1, = ax.plot(x_data, y_data1, 'b-') 
 linea2, = ax.plot(x_data, y_data2, 'g-') 
 linea3, = ax.plot(x_data, y_data3, 'r-') 
@@ -267,8 +356,6 @@ linea4, = ax.plot(x_data, y_data4, 'c-')
 linea5, = ax.plot(x_data, y_data5, 'm-') 
 linea6, = ax.plot(x_data, y_data6, 'y-') 
 
-# Preparamos una línea vacía que luego podremos actualizar con datos
-linea, = ax.plot([], [], lw=2, color='blue')
 ax.set_xlim(0, 50)    # Rango inicial del eje X (ej. 50 muestras)
 ax.set_ylim(-2, 7)  # Rango inicial del eje Y (ej. valores del ADC del Arduino)
 ani = animation.FuncAnimation(fig, play, interval=100, cache_frame_data=False)
