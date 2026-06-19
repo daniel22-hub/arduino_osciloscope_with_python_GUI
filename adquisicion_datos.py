@@ -6,6 +6,7 @@ from tkinter import *
 from tkinter import ttk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import pandas as pd
 
 #******************************** INICIALIZACION DE VARIABLES globales
 puerto_baud = 9600
@@ -130,7 +131,8 @@ def play(_):
                     
             except ValueError as e:
                 print(f"Error al convertir a número: {e}")
-                
+    if len(x_data) > max_puntos:
+        graficando = False
     return linea1, linea2, linea3, linea4, linea5, linea6
     
 def pausar_grafica():
@@ -225,6 +227,23 @@ def actualizar_intervalos():
     except ValueError:
         print("Por favor, ingresa un número entero válido para el intervalo.")
 
+def generar_csv():
+    if x_data and y_data1:  # Verificamos que haya datos para guardar
+        df = pd.DataFrame({
+            "Muestra": x_data,
+            "Canal 1": y_data1,
+            "Canal 2": y_data2,
+            "Canal 3": y_data3,
+            "Canal 4": y_data4,
+            "Canal 5": y_data5,
+            "Canal 6": y_data6
+        })
+        df.drop_duplicates()
+        df.to_csv("datos_mediciones.csv", index=False)
+        print("Datos guardados en 'datos_mediciones.csv'")
+        print(df)
+    else:
+        print("No hay datos para guardar.")
 
 #******************************** MAIN GUI
 window = Tk()
@@ -236,56 +255,56 @@ window.configure(bg="#b8b8b8")
 # ==========================================
 # SECCIÓN IZQUIERDA: Panel de Controles
 # ==========================================
-panel_izquierdo = Frame(window, width=250, bg="#e0e0e0", relief=SUNKEN, borderwidth=2)
+panel_izquierdo = Frame(window, width=275, bg="lightyellow", relief=SUNKEN, borderwidth=2)
 panel_izquierdo.pack(side=LEFT, fill=Y, padx=5, pady=5)
 panel_izquierdo.pack_propagate(False)
 
 # ------------------------------------------ PANEL DE COMUNICACION
-frame_comunicacion = Frame(panel_izquierdo, bg="lightblue") 
-frame_comunicacion.pack(side=TOP, fill=X, padx=10, pady=1)
+frame_comunicacion = Frame(panel_izquierdo, bg="lightyellow") 
+frame_comunicacion.pack(side=TOP, fill=X, padx=10, pady=3)
 
-comunicacion_lbl = Label(frame_comunicacion, text="COMUNICACION", bg="lightblue")
+comunicacion_lbl = Label(frame_comunicacion, text="COMUNICACION", bg="lightyellow")
 comunicacion_lbl.pack(pady=1)
 
-frame_puerto_com = Frame(frame_comunicacion, bg="lightblue")
+frame_puerto_com = Frame(frame_comunicacion, bg="lightyellow")
 frame_puerto_com.pack(side=TOP, fill=X, padx=5, pady=1)
 
 com_list = ttk.Combobox(frame_puerto_com, state="readonly", width=15)
 com_list.pack(side=LEFT, pady=5)
 
-btn_actualizar_com = ttk.Button(frame_puerto_com, text="🔄 Buscar", command=escanear_puertos, width=8)
+btn_actualizar_com = ttk.Button(frame_puerto_com, text="🔄 Buscar", command=escanear_puertos, width=10)
 btn_actualizar_com.pack(side=RIGHT, pady=5)
 
 btn_conectar = ttk.Button(frame_comunicacion, text="Conectar Óhmetro", command=obtener_seleccion)
 btn_conectar.pack(pady=5)
 
-lbl_com = Label(frame_comunicacion, text="Esperando...", fg="black", bg="lightblue")
+lbl_com = Label(frame_comunicacion, text="Esperando...", fg="black", bg="lightyellow")
 lbl_com.pack(pady=5)
 
-lbl_id = Label(frame_comunicacion, text="ID: ", bg="lightblue")
+lbl_id = Label(frame_comunicacion, text="ID: ", bg="lightyellow")
 lbl_id.pack(pady=5)
 
 # ------------------------------------------ PANEL DE PLAY/PASUA/STOP
-panel_control = Frame(panel_izquierdo, bg="lightgreen")
+panel_control = Frame(panel_izquierdo, bg="lightyellow")
 panel_control.pack(fill=X, padx=10, pady=1)
 
-lbl_control = Label(panel_control, text="PLAY/PAUSE/STOP", bg="lightgreen")
+lbl_control = Label(panel_control, text="PLAY/PAUSE/STOP", bg="lightyellow")
 lbl_control.pack(pady=5)
 btn_play = ttk.Button(panel_control, text="▶️ Play", width=10, command=iniciar_grafica)
 btn_play.pack(side=LEFT, padx=5)
 btn_pause = ttk.Button(panel_control, text="⏸️ Pause", width=10, command=pausar_grafica)
 btn_pause.pack(side=LEFT, padx=5)
 btn_stop = ttk.Button(panel_control, text="⏹️ Stop", width=10, command=detener_grafica)
-btn_stop.pack(side=LEFT, padx=5)
+btn_stop.pack(side=LEFT, padx=2)
 
 # ------------------------------------------ PANEL CONFIGURACION
 panel_configuracion = Frame(panel_izquierdo, bg="lightyellow")
-panel_configuracion.pack(fill=X, padx=10, pady=1)
+panel_configuracion.pack(fill=X, padx=10, pady=5)
 
 lbl_configuracion = Label(panel_configuracion, text="CONFIGURACIÓN", bg="lightyellow")
-lbl_configuracion.pack(pady=5)
+lbl_configuracion.pack(pady=1)
 panel_canales = Frame(panel_configuracion, bg="lightyellow")
-panel_canales.pack(side=LEFT, fill=X, padx=5, pady=5)
+panel_canales.pack(side=LEFT, fill=X, padx=5, pady=1)
 lbl_canales = Label(panel_canales, text="Canales", bg="lightyellow")
 lbl_canales.pack(pady=5)
 channel1 = BooleanVar(value=False)
@@ -307,7 +326,7 @@ channel6 = BooleanVar(value=False)
 check6 = ttk.Checkbutton(panel_canales, text="Canal 6", variable=channel6, command=actualizar_canales)
 check6.pack(pady=5)
 panel_ajustes = Frame(panel_configuracion, bg="lightyellow")
-panel_ajustes.pack(side=RIGHT, fill=X, padx=5, pady=5)
+panel_ajustes.pack(side=RIGHT, fill=X, padx=5, pady=1)
 lbl_resistencia = Label(panel_ajustes, text="Resistencia de control (Ohm)", bg="lightyellow")
 lbl_resistencia.pack(pady=5)
 entry_resistencia = ttk.Entry(panel_ajustes, width=15)
@@ -326,6 +345,16 @@ entry_intervalos = ttk.Entry(panel_ajustes, width=15)
 entry_intervalos.pack(pady=5)
 btn_intervalos = ttk.Button(panel_ajustes, text="Enviar", command=actualizar_intervalos)
 btn_intervalos.pack(pady=5)
+
+# ------------------------------------------ PANEL GUARDAR
+panel_guardar = Frame(panel_izquierdo, bg="lightyellow")
+panel_guardar.pack(fill=X, padx=10, pady=1)
+lbl_guardar = Label(panel_guardar, text="Guardar Datos CSV", bg="lightyellow")
+lbl_guardar.pack(side=LEFT, pady=3)
+btn_guardar = ttk.Button(panel_guardar, text="Guardar", width=15, command=generar_csv)
+btn_guardar.pack(side=RIGHT, pady=5)
+
+
 
 # ==========================================
 # SECCIÓN DERECHA: Área de la Gráfica
@@ -349,14 +378,14 @@ y_data5 = []
 y_data6 = []
 x_data = []
 max_puntos = 50 
-linea1, = ax.plot(x_data, y_data1, 'b-') 
+linea1, = ax.plot(x_data, y_data1, 'b-')
 linea2, = ax.plot(x_data, y_data2, 'g-') 
 linea3, = ax.plot(x_data, y_data3, 'r-') 
 linea4, = ax.plot(x_data, y_data4, 'c-') 
 linea5, = ax.plot(x_data, y_data5, 'm-') 
 linea6, = ax.plot(x_data, y_data6, 'y-') 
 
-ax.set_xlim(0, 50)    # Rango inicial del eje X (ej. 50 muestras)
+ax.set_xlim(1, 50)    # Rango inicial del eje X (ej. 50 muestras)
 ax.set_ylim(-2, 7)  # Rango inicial del eje Y (ej. valores del ADC del Arduino)
 ani = animation.FuncAnimation(fig, play, interval=100, cache_frame_data=False)
 
