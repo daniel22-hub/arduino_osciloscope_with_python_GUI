@@ -1,9 +1,9 @@
-from matplotlib import animation
 import serial
 import serial.tools.list_ports
 import time
 from tkinter import *
 from tkinter import ttk
+from matplotlib import animation
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import pandas as pd
@@ -12,7 +12,8 @@ import pandas as pd
 puerto_baud = 9600
 arduino = None  # Creamos el objeto vacío para usarlo globalmente
 graficando = False #Bandera para controlar el estado de la gráfica (play/pause)
-
+vcc = 5.0
+res_control = 0.0
 #******************************** FUNCIONES PROPIAS
 def escanear_puertos():
     puertos_detectados = serial.tools.list_ports.comports()
@@ -86,7 +87,7 @@ def play(_):
         num_respuestas = arduino.in_waiting
         if num_respuestas > 0:
             try:
-                # Leemos y limpiamos espacios o saltos de línea
+                # readline() Lee hasta encontrar un salto de linea
                 respuesta = arduino.readline().decode('utf-8').strip()
                 
                 # --- LÍNEA DE DIAGNÓSTICO (Borrar o comentar después) ---
@@ -96,17 +97,23 @@ def play(_):
                 
                 if len(valores) == 6:
                     v1, v2, v3, v4, v5, v6 = map(float, valores)
-                    
+                    res_sensor1 = (v1*res_control)/(vcc-v1)
+                    res_sensor2 = (v2*res_control)/(vcc-v2)
+                    res_sensor3 = (v3*res_control)/(vcc-v3)
+                    res_sensor4 = (v4*res_control)/(vcc-v4)
+                    res_sensor5 = (v5*res_control)/(vcc-v5)
+                    res_sensor6 = (v6*res_control)/(vcc-v6)
+
                     # 1. Guardamos el historial
-                    y_data1.append(v1)
-                    y_data2.append(v2)
-                    y_data3.append(v3)
-                    y_data4.append(v4)
-                    y_data5.append(v5)
-                    y_data6.append(v6)
+                    y_data1.append(res_sensor1)
+                    y_data2.append(res_sensor2)
+                    y_data3.append(res_sensor3)
+                    y_data4.append(res_sensor4)
+                    y_data5.append(res_sensor5)
+                    y_data6.append(res_sensor6)
                     
                     muestras_totales = len(x_data)
-                    x_data.append(muestras_totales) 
+                    x_data.append(muestras_totales + 1) 
                     
                     # 2. Tomamos SOLO los últimos MAX_PUNTOS
                     x_ventana = x_data[-max_puntos:]
@@ -131,7 +138,7 @@ def play(_):
                     
             except ValueError as e:
                 print(f"Error al convertir a número: {e}")
-    if len(x_data) > max_puntos:
+    if len(x_data) >= max_puntos:
         graficando = False
     return linea1, linea2, linea3, linea4, linea5, linea6
     
@@ -200,7 +207,11 @@ def actualizar_canales():
     canvas.draw_idle()  # Redibujamos la gráfica para actualizar la leyenda
 
 def enviar_resistencia():
+    global res_control
     valor = entry_resistencia.get()
+    res_control = float(valor)
+    ax.set_ylim(-100, res_control+100)  #Actualizamos el rango del eje Y según la nueva resistencia de control
+    print(f"Resistencia de control actualizada a: {res_control} Ohm")
 
 def actualizar_muestras():
     global max_puntos
@@ -216,11 +227,14 @@ def actualizar_muestras():
         print("Por favor, ingresa un número entero válido para las muestras.")
 
 def actualizar_intervalos():
+    global ani 
     valor = entry_intervalos.get()
     try:
         nuevo_intervalo = int(valor)
         if nuevo_intervalo > 0:
-            ani.event_source.interval = nuevo_intervalo
+            if ani and ani.event_source:
+                ani.event_source.stop()
+            ani = animation.FuncAnimation(fig, play, interval=nuevo_intervalo, cache_frame_data=False)
             print(f"Nuevo intervalo de lectura: {nuevo_intervalo} ms")
         else:
             print("El intervalo debe ser un número positivo.")
@@ -229,18 +243,23 @@ def actualizar_intervalos():
 
 def generar_csv():
     if x_data and y_data1:  # Verificamos que haya datos para guardar
-        df = pd.DataFrame({
-            "Muestra": x_data,
-            "Canal 1": y_data1,
-            "Canal 2": y_data2,
-            "Canal 3": y_data3,
-            "Canal 4": y_data4,
-            "Canal 5": y_data5,
-            "Canal 6": y_data6
-        })
-        df.drop_duplicates()
+        df = pd.DataFrame()
+        df['Muestra'] = x_data
+        if channel1.get():
+            df['Canal 1'] = y_data1
+        if channel2.get():
+            df['Canal 2'] = y_data2
+        if channel3.get():
+            df['Canal 3'] = y_data3
+        if channel4.get():
+            df['Canal 4'] = y_data4
+        if channel5.get():
+            df['Canal 5'] = y_data5
+        if channel6.get():
+            df['Canal 6'] = y_data6
+        
         df.to_csv("datos_mediciones.csv", index=False)
-        print("Datos guardados en 'datos_mediciones.csv'")
+        print("Datos guardados en 'archivos\\datos_mediciones.csv'")
         print(df)
     else:
         print("No hay datos para guardar.")
@@ -367,7 +386,7 @@ panel_derecho.pack(side=RIGHT, fill=BOTH, expand=True, padx=5, pady=5)
 fig, ax = plt.subplots(figsize=(6, 4), dpi=100)
 ax.set_title("Mediciones en Tiempo Real")
 ax.set_xlabel("Muestras")
-ax.set_ylabel("Valor")
+ax.set_ylabel("Resistencia (Ohm)")
 ax.grid(True, linestyle='--', alpha=0.7)
 
 y_data1 = []
@@ -386,7 +405,7 @@ linea5, = ax.plot(x_data, y_data5, 'm-')
 linea6, = ax.plot(x_data, y_data6, 'y-') 
 
 ax.set_xlim(1, 50)    # Rango inicial del eje X (ej. 50 muestras)
-ax.set_ylim(-2, 7)  # Rango inicial del eje Y (ej. valores del ADC del Arduino)
+ax.set_ylim(-100, res_control+100)  #Valor máximo de la resistencia de control
 ani = animation.FuncAnimation(fig, play, interval=100, cache_frame_data=False)
 
 
